@@ -4,9 +4,13 @@ on:
   pull_request:
     branches:
       - ros2
+      - jazzy
+      - jazzy-dev
   push:
     branches:
       - ros2
+      - jazzy
+      - jazzy-dev
 
 jobs:
 
