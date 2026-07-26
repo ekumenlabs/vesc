@@ -26,6 +26,8 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+"""Launch file for VESC driver node."""
+
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -36,23 +38,24 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-
+    """Generate launch description for VESC driver node."""
     vesc_config = os.path.join(
         get_package_share_directory('vesc_driver'),
         'params',
-        'vesc_config.yaml'
-        )
-    return LaunchDescription([
-        DeclareLaunchArgument(
-            name="config",
-            default_value=vesc_config,
-            description="VESC yaml configuration file.",
+        'vesc_config.yaml',
+    )
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                name='config',
+                default_value=vesc_config,
+                description='VESC yaml configuration file.',
             ),
-        Node(
-            package='vesc_driver',
-            executable='vesc_driver_node',
-            name='vesc_driver_node',
-            parameters=[LaunchConfiguration("config")]
-        ),
-
-    ])
+            Node(
+                package='vesc_driver',
+                executable='vesc_driver_node',
+                name='vesc_driver_node',
+                parameters=[LaunchConfiguration('config')],
+            ),
+        ]
+    )
