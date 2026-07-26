@@ -17,6 +17,7 @@
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
+  <depend>asio_cmake_module</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
   <depend>std_msgs</depend>
