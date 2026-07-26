@@ -1,0 +1,41 @@
+name: Unit tests run in CI
+
+on:
+  push:
+    branches:
+      - main
+      - jazzy
+      - jazzy-dev
+
+  pull_request:
+    branches:
+      - main
+      - jazzy
+      - jazzy-dev
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+env:
+  ROS_DOMAIN_ID: 88
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v7
+
+    - name: Pre-build docker image
+      run: |
+        ./docker/run.sh --build -- echo "We have a working image!"
+
+    - name: Build code and run tests
+      run: |
+        ./docker/run.sh --build -- bash -c '                   \
+        rm -rf build/* install/* log/*                      && \
+        colcon build --symlink-install                      && \
+        . install/setup.bash                                && \
+        colcon test                                         && \
+        echo "CI test runner completed."                    '
