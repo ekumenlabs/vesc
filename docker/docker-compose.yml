@@ -1,0 +1,27 @@
+services:
+  vesc_devel_base:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.${ROS_DISTRO}
+      target: vesc_service_image_devel
+    environment:
+      - DISPLAY
+      - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - XAUTHORITY=/tmp/.docker.xauth
+    stdin_open: true
+    tty: true
+    user: ${USERID:-1000}:${GROUPID:-1000}
+    volumes:
+      - ..:/home/developer/ws/src/project
+      - /dev:/dev
+      - /tmp:/tmp:rw
+      - vesc_persistence:/home/developer/ws/persistence
+
+  vesc_devel:
+    extends:
+      service: vesc_devel_base
+    network_mode: host
+
+volumes:
+  vesc_persistence:
