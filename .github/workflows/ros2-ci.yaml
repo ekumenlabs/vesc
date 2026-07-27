@@ -20,7 +20,10 @@ jobs:
       matrix:
         config:
         - {
-          ros_distro: "humble"
+          ros_distro: "jazzy"
+        }
+        - {
+          ros_distro: "kilted"
         }
     runs-on: ubuntu-latest
     container:
