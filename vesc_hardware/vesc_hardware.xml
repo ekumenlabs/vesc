@@ -1,0 +1,9 @@
+<library path="vesc_hardware">
+  <class name="vesc_hardware/VescHardware"
+         type="vesc_hardware::VescHardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      ROS 2 Control hardware interface for the VESC motor controller.
+    </description>
+  </class>
+</library>
