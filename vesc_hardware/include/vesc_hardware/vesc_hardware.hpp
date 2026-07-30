@@ -181,6 +181,7 @@ private:
   // Command storage
   double hw_command_position_;
   double hw_command_velocity_;
+  double hw_command_servo_;
 };
 
 }  // namespace vesc_hardware

@@ -93,11 +93,13 @@ hardware_interface::CallbackReturn VescHardware::on_init(
 
   // Initialize list of supported interfaces
   state_interfaces_ = {{hardware_interface::HW_IF_POSITION, "position", false},
-    {hardware_interface::HW_IF_VELOCITY, "velocity", false}};
+    {hardware_interface::HW_IF_VELOCITY, "velocity", false},
+    {"servo", "servo", false}};
 
   command_interfaces_ = {
     {hardware_interface::HW_IF_POSITION, "position", false},
-    {hardware_interface::HW_IF_VELOCITY, "velocity", false}};
+    {hardware_interface::HW_IF_VELOCITY, "velocity", false},
+    {"servo", "servo", false}};
 
   // Check which state interfaces are requested
   for (const auto & state_interface : joint.state_interfaces) {
@@ -186,6 +188,7 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   hw_state_velocity_ = 0.0;
   hw_command_position_ = 0.0;
   hw_command_velocity_ = 0.0;
+  hw_command_servo_ = 0.0;
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -291,6 +294,9 @@ VescHardware::read(
       set_state(name, hw_state_position_.load(std::memory_order_relaxed));
     } else if (interface_type == hardware_interface::HW_IF_VELOCITY) {
       set_state(name, hw_state_velocity_.load(std::memory_order_relaxed));
+    } else if (interface_type == "servo") {
+      // Servo state mirrors command because the VESC cannot read servo position
+      set_state(name, hw_command_servo_);
     }
   }
 
@@ -320,6 +326,9 @@ VescHardware::write(
       hw_command_velocity_ = get_command(name);
       double vesc_erpm = convertMechanicalRadSecToERPM(hw_command_velocity_);
       vesc_interface_->setSpeed(vesc_erpm);
+    } else if (interface_type == "servo") {
+      hw_command_servo_ = get_command(name);
+      vesc_interface_->setServo(hw_command_servo_);
     } else {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
                            "Unknown command interface type: %s",
