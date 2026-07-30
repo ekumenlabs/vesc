@@ -83,9 +83,19 @@ hardware_interface::CallbackReturn VescHardware::on_init(
     pole_pairs_ = 1;
   }
 
+  // Read optional publish_raw_state parameter (default: false)
+  auto it_publish_raw_state = info_.hardware_parameters.find("publish_raw_state");
+  if (it_publish_raw_state != info_.hardware_parameters.end()) {
+    publish_raw_state_ = (it_publish_raw_state->second == "true" ||
+      it_publish_raw_state->second == "1");
+  } else {
+    publish_raw_state_ = false;
+  }
+
   RCLCPP_INFO(get_logger(), "Configured device: %s", device_.c_str());
   RCLCPP_INFO(get_logger(), "Gear ratio: %.2f, Pole pairs: %d", gear_ratio_,
               pole_pairs_);
+  RCLCPP_INFO(get_logger(), "Publish raw state: %s", publish_raw_state_ ? "true" : "false");
 
   // Validate interfaces
   if (info_.joints.size() != 1) {
@@ -174,6 +184,19 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   hw_state_position_ = 0.0;
   hw_state_velocity_ = 0.0;
   hw_command_servo_ = 0.0;
+
+  // Create publisher for hardware values (only if enabled)
+  if (publish_raw_state_) {
+    hardware_values_publisher_ =
+      get_node()->create_publisher<vesc_hardware_msgs::msg::VescHardwareValues>(
+        "~/hardware_values", 10);
+
+    // Create realtime publisher wrapper
+    realtime_hardware_values_publisher_ =
+      std::make_shared<realtime_tools::RealtimePublisher<
+          vesc_hardware_msgs::msg::VescHardwareValues>>(
+          hardware_values_publisher_);
+  }
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -390,6 +413,60 @@ void VescHardware::processValuesPacket(
   double mechanical_velocity =
     convertERPMtoMechanicalRadSec(values_packet->rpm());
   hw_state_velocity_.store(mechanical_velocity, std::memory_order_relaxed);
+
+  // Publish telemetry data
+  publishVescState(*values_packet);
+}
+
+void VescHardware::publishVescState(
+  const vesc_driver::VescPacketValues & values_packet)
+{
+  if (!realtime_hardware_values_publisher_) {
+    return;
+  }
+
+  if (realtime_hardware_values_publisher_->trylock()) {
+    auto & msg = realtime_hardware_values_publisher_->msg_;
+
+    // Temperature measurements
+    msg.temp_fet = values_packet.temp_fet();
+    msg.temp_motor = values_packet.temp_motor();
+    msg.temp_mos1 = values_packet.temp_mos1();
+    msg.temp_mos2 = values_packet.temp_mos2();
+    msg.temp_mos3 = values_packet.temp_mos3();
+
+    // Current measurements
+    msg.avg_motor_current = values_packet.avg_motor_current();
+    msg.avg_input_current = values_packet.avg_input_current();
+    msg.avg_id = values_packet.avg_id();
+    msg.avg_iq = values_packet.avg_iq();
+
+    // Voltage measurements
+    msg.v_in = values_packet.v_in();
+    msg.avg_vd = values_packet.avg_vd();
+    msg.avg_vq = values_packet.avg_vq();
+
+    // Duty cycle and speed
+    msg.duty_cycle_now = values_packet.duty_cycle_now();
+    msg.rpm = values_packet.rpm();
+
+    // Energy and charge tracking
+    msg.amp_hours = values_packet.amp_hours();
+    msg.amp_hours_charged = values_packet.amp_hours_charged();
+    msg.watt_hours = values_packet.watt_hours();
+    msg.watt_hours_charged = values_packet.watt_hours_charged();
+
+    // Position and distance tracking
+    msg.tachometer = values_packet.tachometer();
+    msg.tachometer_abs = values_packet.tachometer_abs();
+    msg.pid_pos_now = values_packet.pid_pos_now();
+
+    // Status
+    msg.fault_code = values_packet.fault_code();
+    msg.controller_id = values_packet.controller_id();
+
+    realtime_hardware_values_publisher_->unlockAndPublish();
+  }
 }
 
 void VescHardware::vescPacketCallback(

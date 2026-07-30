@@ -42,7 +42,9 @@
 #include "rclcpp/macros.hpp"
 #include "rclcpp_lifecycle/node_interfaces/lifecycle_node_interface.hpp"
 #include "rclcpp_lifecycle/state.hpp"
+#include "realtime_tools/realtime_publisher.hpp"
 #include "vesc_driver/vesc_interface.hpp"
+#include "vesc_hardware_msgs/msg/vesc_hardware_values.hpp"
 
 namespace vesc_hardware
 {
@@ -144,6 +146,7 @@ private:
 
   // VESC packet processing
   void processValuesPacket(const vesc_driver::VescPacketValues *values_packet);
+  void publishVescState(const vesc_driver::VescPacketValues & values_packet);
 
   // Conversion functions for VESC values to mechanical values (for reading
   // state)
@@ -174,8 +177,9 @@ private:
 
   // Hardware parameters
   std::string device_;
-  double gear_ratio_;  // Gear ratio between motor and output (default: 1.0)
-  int pole_pairs_;  // Motor pole pairs (default: 1)
+  double gear_ratio_;  // Gear ratio between motor and output
+  int pole_pairs_;  // Motor pole pairs
+  bool publish_raw_state_;  // Whether to publish raw VESC telemetry
 
   // State storage (atomic for thread-safe access from callback)
   std::atomic<double> hw_state_position_;
@@ -190,6 +194,12 @@ private:
 
   // VESC interface
   std::unique_ptr<vesc_driver::VescInterface> vesc_interface_;
+
+  // Publisher for hardware values
+  std::shared_ptr<rclcpp::Publisher<vesc_hardware_msgs::msg::VescHardwareValues>>
+  hardware_values_publisher_;
+  std::shared_ptr<realtime_tools::RealtimePublisher<vesc_hardware_msgs::msg::VescHardwareValues>>
+  realtime_hardware_values_publisher_;
 };
 
 }  // namespace vesc_hardware
