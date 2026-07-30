@@ -35,12 +35,12 @@ VescDeviceLookup::VescDeviceLookup(std::string name)
     std::string(),
     std::bind(&VescDeviceLookup::vescPacketCallback, this, _1),
     std::bind(&VescDeviceLookup::vescErrorCallback, this, _1)
-)
+  )
 {
   try {
     vesc_.connect(device_);
     vesc_.requestFWVersion();
-  } catch (SerialException &e) {
+  } catch (SerialException & e) {
     std::cerr << "VESC error on port " << device_ << std::endl << e.what() << std::endl;
     return;
   }
