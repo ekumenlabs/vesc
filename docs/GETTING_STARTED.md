@@ -30,18 +30,3 @@ Execute ROS 2 commands or other tools directly:
 ./run.sh -- colcon build
 ./run.sh -- bash
 ```
-
-## Working with the VESC
-
-Once inside the container, the workspace is located at `/home/developer/ws/src/project`.
-
-1. Build the packages:
-   ```bash
-   colcon build
-   source install/setup.bash
-   ```
-
-2. Launch the VESC driver:
-   ```bash
-   ros2 launch vesc_driver vesc_driver_node.launch.py
-   ```

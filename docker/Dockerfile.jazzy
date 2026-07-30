@@ -50,7 +50,6 @@ RUN apt update \
  && dpkg-reconfigure --frontend noninteractive tzdata \
  && rm -rf /var/lib/apt/lists/*
 
-
 FROM vesc_service_image_base AS vesc_service_image_devel
 
 RUN apt update && sudo apt install curl -y \

@@ -1,7 +1,6 @@
 # Run against all the files: pre-commit run -a
 # Install the git hook scripts: pre-commit install
 
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
@@ -39,9 +38,3 @@ repos:
     rev: v0.6.13
     hooks:
       - id: cmake-lint
-
-exclude: |
-    (?x)(
-        ((.*)\.pgm)$
-    ) | ^docker/files/patches/(.*\.patch)$
-    | ^documentation/.*$
