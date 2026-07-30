@@ -29,13 +29,13 @@ namespace vesc_driver
 using std::placeholders::_1;
 
 VescDeviceLookup::VescDeviceLookup(std::string name)
-: vesc_(
+: device_(name),
+  ready_(false),
+  vesc_(
     std::string(),
     std::bind(&VescDeviceLookup::vescPacketCallback, this, _1),
     std::bind(&VescDeviceLookup::vescErrorCallback, this, _1)
-),
-  ready_(false),
-  device_(name)
+)
 {
   try {
     vesc_.connect(device_);
