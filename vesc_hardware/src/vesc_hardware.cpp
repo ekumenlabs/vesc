@@ -42,6 +42,11 @@
 #include "rclcpp/rclcpp.hpp"
 #include "vesc_driver/vesc_packet.hpp"
 
+namespace
+{
+constexpr char CUSTOM_HW_IF_SERVO[] = "servo";
+}  // namespace
+
 namespace vesc_hardware
 {
 hardware_interface::CallbackReturn VescHardware::on_init(
@@ -92,82 +97,64 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   const auto & joint = info_.joints[0];
 
   // Initialize list of supported interfaces
-  state_interfaces_ = {{hardware_interface::HW_IF_POSITION, "position", false},
-    {hardware_interface::HW_IF_VELOCITY, "velocity", false},
-    {"servo", "servo", false}};
-
-  command_interfaces_ = {
-    {hardware_interface::HW_IF_POSITION, "position", false},
-    {hardware_interface::HW_IF_VELOCITY, "velocity", false},
-    {"servo", "servo", false}};
+  populate_state_definitions();
+  populate_command_definitions();
 
   // Check which state interfaces are requested
   for (const auto & state_interface : joint.state_interfaces) {
-    bool found = false;
-    for (auto & supported_interface : state_interfaces_) {
-      if (state_interface.name == supported_interface.name) {
-        if (supported_interface.requested) {
-          RCLCPP_FATAL(
-              get_logger(),
-              "Duplicate state interface '%s' requested for joint '%s'",
-              state_interface.name.c_str(), joint.name.c_str());
-          return hardware_interface::CallbackReturn::ERROR;
-        }
-        supported_interface.requested = true;
-        found = true;
-        RCLCPP_INFO(get_logger(), "State interface '%s' requested",
-                    state_interface.name.c_str());
-        break;
-      }
-    }
-    if (!found) {
+    auto it = state_interfaces_.find(state_interface.name);
+    if (it == state_interfaces_.end()) {
       RCLCPP_FATAL(get_logger(),
                    "Unsupported state interface '%s' requested for joint '%s'",
                    state_interface.name.c_str(), joint.name.c_str());
       return hardware_interface::CallbackReturn::ERROR;
     }
+    if (it->second.requested) {
+      RCLCPP_FATAL(
+          get_logger(),
+          "Duplicate state interface '%s' requested for joint '%s'",
+          state_interface.name.c_str(), joint.name.c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+    it->second.requested = true;
+    RCLCPP_INFO(get_logger(), "State interface '%s' requested",
+                state_interface.name.c_str());
   }
 
   // Check which command interfaces are requested
   for (const auto & command_interface : joint.command_interfaces) {
-    bool found = false;
-    for (auto & supported_interface : command_interfaces_) {
-      if (command_interface.name == supported_interface.name) {
-        if (supported_interface.requested) {
-          RCLCPP_FATAL(
-              get_logger(),
-              "Duplicate command interface '%s' requested for joint '%s'",
-              command_interface.name.c_str(), joint.name.c_str());
-          return hardware_interface::CallbackReturn::ERROR;
-        }
-        supported_interface.requested = true;
-        found = true;
-        RCLCPP_INFO(get_logger(), "Command interface '%s' requested",
-                    command_interface.name.c_str());
-        break;
-      }
-    }
-    if (!found) {
+    auto it = command_interfaces_.find(command_interface.name);
+    if (it == command_interfaces_.end()) {
       RCLCPP_FATAL(
           get_logger(),
           "Unsupported command interface '%s' requested for joint '%s'",
           command_interface.name.c_str(), joint.name.c_str());
       return hardware_interface::CallbackReturn::ERROR;
     }
+    if (it->second.requested) {
+      RCLCPP_FATAL(
+          get_logger(),
+          "Duplicate command interface '%s' requested for joint '%s'",
+          command_interface.name.c_str(), joint.name.c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+    it->second.requested = true;
+    RCLCPP_INFO(get_logger(), "Command interface '%s' requested",
+                command_interface.name.c_str());
   }
 
   // Check that at least one interface is requested
   bool has_state_interface = false;
-  for (const auto & iface : state_interfaces_) {
-    if (iface.requested) {
+  for (const auto & [name, data] : state_interfaces_) {
+    if (data.requested) {
       has_state_interface = true;
       break;
     }
   }
 
   bool has_command_interface = false;
-  for (const auto & iface : command_interfaces_) {
-    if (iface.requested) {
+  for (const auto & [name, data] : command_interfaces_) {
+    if (data.requested) {
       has_command_interface = true;
       break;
     }
@@ -186,8 +173,6 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   // Initialize state and command storage
   hw_state_position_ = 0.0;
   hw_state_velocity_ = 0.0;
-  hw_command_position_ = 0.0;
-  hw_command_velocity_ = 0.0;
   hw_command_servo_ = 0.0;
 
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -200,15 +185,15 @@ VescHardware::on_configure(const rclcpp_lifecycle::State & /*previous_state*/)
 
   // Log which interfaces are active
   RCLCPP_INFO(get_logger(), "Active state interfaces:");
-  for (const auto & iface : state_interfaces_) {
-    if (iface.requested) {
-      RCLCPP_INFO(get_logger(), "  - %s", iface.type.c_str());
+  for (const auto & [name, data] : state_interfaces_) {
+    if (data.requested) {
+      RCLCPP_INFO(get_logger(), "  - %s", name.c_str());
     }
   }
   RCLCPP_INFO(get_logger(), "Active command interfaces:");
-  for (const auto & iface : command_interfaces_) {
-    if (iface.requested) {
-      RCLCPP_INFO(get_logger(), "  - %s", iface.type.c_str());
+  for (const auto & [name, data] : command_interfaces_) {
+    if (data.requested) {
+      RCLCPP_INFO(get_logger(), "  - %s", name.c_str());
     }
   }
 
@@ -289,14 +274,9 @@ VescHardware::read(
   // (These are updated asynchronously by vescPacketCallback)
   for (const auto &[name, descr] : joint_state_interfaces_) {
     std::string interface_type = name.substr(name.find_last_of("/") + 1);
-
-    if (interface_type == hardware_interface::HW_IF_POSITION) {
-      set_state(name, hw_state_position_.load(std::memory_order_relaxed));
-    } else if (interface_type == hardware_interface::HW_IF_VELOCITY) {
-      set_state(name, hw_state_velocity_.load(std::memory_order_relaxed));
-    } else if (interface_type == "servo") {
-      // Servo state mirrors command because the VESC cannot read servo position
-      set_state(name, hw_command_servo_);
+    auto it = state_interfaces_.find(interface_type);
+    if (it != state_interfaces_.end() && it->second.get_value) {
+      set_state(name, it->second.get_value());
     }
   }
 
@@ -317,22 +297,9 @@ VescHardware::write(
   for (const auto &[name, descr] : joint_command_interfaces_) {
     // Extract interface type from full name "motor_joint/velocity"
     std::string interface_type = name.substr(name.find_last_of("/") + 1);
-
-    if (interface_type == hardware_interface::HW_IF_POSITION) {
-      hw_command_position_ = get_command(name);
-      double vesc_position = convertMechanicalRadToDeg(hw_command_position_);
-      vesc_interface_->setPosition(vesc_position);
-    } else if (interface_type == hardware_interface::HW_IF_VELOCITY) {
-      hw_command_velocity_ = get_command(name);
-      double vesc_erpm = convertMechanicalRadSecToERPM(hw_command_velocity_);
-      vesc_interface_->setSpeed(vesc_erpm);
-    } else if (interface_type == "servo") {
-      hw_command_servo_ = get_command(name);
-      vesc_interface_->setServo(hw_command_servo_);
-    } else {
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
-                           "Unknown command interface type: %s",
-                           interface_type.c_str());
+    auto it = command_interfaces_.find(interface_type);
+    if (it != command_interfaces_.end() && it->second.set_command) {
+      it->second.set_command(get_command(name));
     }
   }
 
@@ -366,6 +333,47 @@ double VescHardware::convertMechanicalRadSecToERPM(
   const double motor_rpm = output_rpm * gear_ratio_;
   const double erpm = motor_rpm * static_cast<double>(pole_pairs_);
   return erpm;
+}
+
+void VescHardware::populate_state_definitions()
+{
+  state_interfaces_[hardware_interface::HW_IF_POSITION] = {
+    false,
+    [this]() {return hw_state_position_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[hardware_interface::HW_IF_VELOCITY] = {
+    false,
+    [this]() {return hw_state_velocity_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_SERVO] = {
+    false,
+    [this]() {return hw_command_servo_;}
+  };
+}
+
+void VescHardware::populate_command_definitions()
+{
+  command_interfaces_[hardware_interface::HW_IF_POSITION] = {
+    false,
+    [this](double value) {
+      double vesc_position = convertMechanicalRadToDeg(value);
+      vesc_interface_->setPosition(vesc_position);
+    }
+  };
+  command_interfaces_[hardware_interface::HW_IF_VELOCITY] = {
+    false,
+    [this](double value) {
+      double vesc_erpm = convertMechanicalRadSecToERPM(value);
+      vesc_interface_->setSpeed(vesc_erpm);
+    }
+  };
+  command_interfaces_[CUSTOM_HW_IF_SERVO] = {
+    false,
+    [this](double value) {
+      hw_command_servo_ = value;
+      vesc_interface_->setServo(hw_command_servo_);
+    }
+  };
 }
 
 void VescHardware::processValuesPacket(

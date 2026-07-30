@@ -30,9 +30,10 @@
 #define VESC_HARDWARE__VESC_HARDWARE_HPP_
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <string>
-#include <vector>
+#include <unordered_map>
 
 #include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
@@ -154,12 +155,21 @@ private:
   double convertMechanicalRadToDeg(double mechanical_position_rad) const;
   double convertMechanicalRadSecToERPM(double mechanical_velocity_rad_s) const;
 
-  // Interface tracking structure
-  struct InterfaceInfo
+  // Interface definition initialization
+  void populate_state_definitions();
+  void populate_command_definitions();
+
+  // Interface data structures
+  struct StateInterfaceData
   {
-    std::string name;  // Interface name (position or velocity)
-    std::string type;  // Interface type string
     bool requested;  // Whether this interface was requested in URDF
+    std::function<double()> get_value;  // Functor to retrieve current state value
+  };
+
+  struct CommandInterfaceData
+  {
+    bool requested;  // Whether this interface was requested in URDF
+    std::function<void(double)> set_command;  // Functor to send command to hardware
   };
 
   // Hardware parameters
@@ -167,21 +177,19 @@ private:
   double gear_ratio_;  // Gear ratio between motor and output (default: 1.0)
   int pole_pairs_;  // Motor pole pairs (default: 1)
 
-  // VESC interface
-  std::unique_ptr<vesc_driver::VescInterface> vesc_interface_;
-
-  // Interface availability tracking
-  std::vector<InterfaceInfo> state_interfaces_;
-  std::vector<InterfaceInfo> command_interfaces_;
-
   // State storage (atomic for thread-safe access from callback)
   std::atomic<double> hw_state_position_;
   std::atomic<double> hw_state_velocity_;
 
-  // Command storage
-  double hw_command_position_;
-  double hw_command_velocity_;
+  // Command storage (servo only - state mirrors command since VESC can't read it)
   double hw_command_servo_;
+
+  // Interface availability tracking
+  std::unordered_map<std::string, StateInterfaceData> state_interfaces_;
+  std::unordered_map<std::string, CommandInterfaceData> command_interfaces_;
+
+  // VESC interface
+  std::unique_ptr<vesc_driver::VescInterface> vesc_interface_;
 };
 
 }  // namespace vesc_hardware
