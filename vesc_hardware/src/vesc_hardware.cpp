@@ -58,9 +58,9 @@ constexpr char CUSTOM_HW_IF_ORIENTATION_Z[] = "orientation.z";
 constexpr char CUSTOM_HW_IF_ORIENTATION_W[] = "orientation.w";
 
 // IMU sensor interface names - Euler angles
-constexpr char CUSTOM_HW_IF_ROLL[] = "roll";
-constexpr char CUSTOM_HW_IF_PITCH[] = "pitch";
-constexpr char CUSTOM_HW_IF_YAW[] = "yaw";
+constexpr char CUSTOM_HW_IF_ROLL[] = "euler_angles.roll";
+constexpr char CUSTOM_HW_IF_PITCH[] = "euler_angles.pitch";
+constexpr char CUSTOM_HW_IF_YAW[] = "euler_angles.yaw";
 
 // IMU sensor interface names - Angular velocity
 constexpr char CUSTOM_HW_IF_ANGULAR_VELOCITY_X[] = "angular_velocity.x";
