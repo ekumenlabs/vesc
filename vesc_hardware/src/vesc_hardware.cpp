@@ -188,13 +188,13 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   // Create publisher for hardware values (only if enabled)
   if (publish_raw_state_) {
     hardware_values_publisher_ =
-      get_node()->create_publisher<vesc_hardware_msgs::msg::VescHardwareValues>(
+      get_node()->create_publisher<vesc_msgs::msg::VescState>(
         "~/hardware_values", 10);
 
     // Create realtime publisher wrapper
     realtime_hardware_values_publisher_ =
       std::make_shared<realtime_tools::RealtimePublisher<
-          vesc_hardware_msgs::msg::VescHardwareValues>>(
+          vesc_msgs::msg::VescState>>(
           hardware_values_publisher_);
   }
 
@@ -431,34 +431,34 @@ void VescHardware::publishVescState(
     // Temperature measurements
     msg.temp_fet = values_packet.temp_fet();
     msg.temp_motor = values_packet.temp_motor();
-    msg.temp_mos1 = values_packet.temp_mos1();
-    msg.temp_mos2 = values_packet.temp_mos2();
-    msg.temp_mos3 = values_packet.temp_mos3();
+    msg.ntc_temp_mos1 = values_packet.temp_mos1();
+    msg.ntc_temp_mos2 = values_packet.temp_mos2();
+    msg.ntc_temp_mos3 = values_packet.temp_mos3();
 
     // Current measurements
-    msg.avg_motor_current = values_packet.avg_motor_current();
-    msg.avg_input_current = values_packet.avg_input_current();
+    msg.current_motor = values_packet.avg_motor_current();
+    msg.current_input = values_packet.avg_input_current();
     msg.avg_id = values_packet.avg_id();
     msg.avg_iq = values_packet.avg_iq();
 
     // Voltage measurements
-    msg.v_in = values_packet.v_in();
+    msg.voltage_input = values_packet.v_in();
     msg.avg_vd = values_packet.avg_vd();
     msg.avg_vq = values_packet.avg_vq();
 
     // Duty cycle and speed
-    msg.duty_cycle_now = values_packet.duty_cycle_now();
-    msg.rpm = values_packet.rpm();
+    msg.duty_cycle = values_packet.duty_cycle_now();
+    msg.speed = values_packet.rpm();
 
     // Energy and charge tracking
-    msg.amp_hours = values_packet.amp_hours();
-    msg.amp_hours_charged = values_packet.amp_hours_charged();
-    msg.watt_hours = values_packet.watt_hours();
-    msg.watt_hours_charged = values_packet.watt_hours_charged();
+    msg.charge_drawn = values_packet.amp_hours();
+    msg.charge_regen = values_packet.amp_hours_charged();
+    msg.energy_drawn = values_packet.watt_hours();
+    msg.energy_regen = values_packet.watt_hours_charged();
 
     // Position and distance tracking
-    msg.tachometer = values_packet.tachometer();
-    msg.tachometer_abs = values_packet.tachometer_abs();
+    msg.displacement = values_packet.tachometer();
+    msg.distance_traveled = values_packet.tachometer_abs();
     msg.pid_pos_now = values_packet.pid_pos_now();
 
     // Status

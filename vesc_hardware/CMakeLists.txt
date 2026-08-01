@@ -13,7 +13,7 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(vesc_driver REQUIRED)
-find_package(vesc_hardware_msgs REQUIRED)
+find_package(vesc_msgs REQUIRED)
 
 ## COMPILE
 add_library(
@@ -32,7 +32,7 @@ target_link_libraries(vesc_hardware PUBLIC
   rclcpp_lifecycle::rclcpp_lifecycle
   realtime_tools::realtime_tools
   vesc_driver::vesc_driver
-  ${vesc_hardware_msgs_TARGETS}
+  ${vesc_msgs_TARGETS}
 )
 
 # Export hardware plugins
@@ -59,7 +59,7 @@ ament_export_dependencies(
   rclcpp_lifecycle
   realtime_tools
   vesc_driver
-  vesc_hardware_msgs
+  vesc_msgs
 )
 
 if(BUILD_TESTING)
