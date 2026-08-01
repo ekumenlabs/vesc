@@ -586,18 +586,14 @@ void VescHardware::processValuesPacket(
     convertERPMtoMechanicalRadSec(values_packet->rpm());
   hw_state_velocity_.store(mechanical_velocity, std::memory_order_relaxed);
 
-  // Store motor current values
   hw_avg_id_.store(values_packet->avg_id(), std::memory_order_relaxed);
   hw_avg_iq_.store(values_packet->avg_iq(), std::memory_order_relaxed);
 
-  // Store motor voltage values
   hw_avg_vd_.store(values_packet->avg_vd(), std::memory_order_relaxed);
   hw_avg_vq_.store(values_packet->avg_vq(), std::memory_order_relaxed);
 
-  // Store duty cycle
   hw_duty_cycle_.store(values_packet->duty_cycle_now(), std::memory_order_relaxed);
 
-  // Publish telemetry data
   publishVescState(*values_packet);
 }
 
@@ -608,19 +604,15 @@ void VescHardware::processImuPacket(
     return;
   }
 
-  // Conversion lambda: degrees to radians
   auto deg_to_rad = [](double deg) {return deg * M_PI / 180.0;};
 
-  // Standard gravity constant for converting acceleration from 'g' to m/s²
   constexpr double STANDARD_GRAVITY = 9.80665;
 
-  // Store quaternion orientation (already in correct units)
   hw_imu_orientation_x_.store(imu_packet->q_x(), std::memory_order_relaxed);
   hw_imu_orientation_y_.store(imu_packet->q_y(), std::memory_order_relaxed);
   hw_imu_orientation_z_.store(imu_packet->q_z(), std::memory_order_relaxed);
   hw_imu_orientation_w_.store(imu_packet->q_w(), std::memory_order_relaxed);
 
-  // Store Euler angles (convert from degrees to radians)
   hw_imu_roll_.store(deg_to_rad(imu_packet->roll()), std::memory_order_relaxed);
   hw_imu_pitch_.store(deg_to_rad(imu_packet->pitch()), std::memory_order_relaxed);
   hw_imu_yaw_.store(deg_to_rad(imu_packet->yaw()), std::memory_order_relaxed);
@@ -643,7 +635,6 @@ void VescHardware::processImuPacket(
   hw_imu_magnetic_field_y_.store(imu_packet->mag_y(), std::memory_order_relaxed);
   hw_imu_magnetic_field_z_.store(imu_packet->mag_z(), std::memory_order_relaxed);
 
-  // Publish raw IMU data
   publishVescImu(*imu_packet);
 }
 
@@ -657,16 +648,15 @@ void VescHardware::publishVescImu(
   if (realtime_imu_publisher_->trylock()) {
     auto & msg = realtime_imu_publisher_->msg_;
 
-    // Set timestamp
     msg.header.stamp = get_node()->now();
     msg.header.frame_id = "";
 
-    // Yaw, Pitch, Roll (in degrees as received)
+    // Euler angles (in degrees as received)
     msg.imu.ypr.x = imu_packet.yaw();
     msg.imu.ypr.y = imu_packet.pitch();
     msg.imu.ypr.z = imu_packet.roll();
 
-    // Linear acceleration (in m/s²)
+    // Linear acceleration (in g's as received)
     msg.imu.linear_acceleration.x = imu_packet.acc_x();
     msg.imu.linear_acceleration.y = imu_packet.acc_y();
     msg.imu.linear_acceleration.z = imu_packet.acc_z();
