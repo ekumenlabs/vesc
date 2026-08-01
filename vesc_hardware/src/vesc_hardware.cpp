@@ -28,6 +28,7 @@
 
 #include "vesc_hardware/vesc_hardware.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <functional>
@@ -526,6 +527,14 @@ void VescHardware::populate_command_definitions()
     [this](double value) {
       hw_command_servo_ = value;
       vesc_interface_->setServo(hw_command_servo_);
+    }
+  };
+  command_interfaces_[CUSTOM_HW_IF_DUTY_CYCLE] = {
+    false,
+    [this](double value) {
+      // Clamp duty cycle to [0, 1] range
+      double clamped_duty_cycle = std::clamp(value, 0.0, 1.0);
+      vesc_interface_->setDutyCycle(clamped_duty_cycle);
     }
   };
 }
