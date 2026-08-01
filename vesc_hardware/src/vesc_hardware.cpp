@@ -216,9 +216,16 @@ hardware_interface::CallbackReturn VescHardware::on_init(
                 joint.name.c_str());
   }
 
-  // Initialize state and command storage
+  // Initialize state storage
   hw_state_position_ = 0.0;
   hw_state_velocity_ = 0.0;
+  hw_avg_id_ = 0.0;
+  hw_avg_iq_ = 0.0;
+  hw_avg_vd_ = 0.0;
+  hw_avg_vq_ = 0.0;
+  hw_duty_cycle_ = 0.0;
+
+  // Initialize command storage
   hw_command_servo_ = 0.0;
 
   // Create publisher for hardware values (only if enabled)
