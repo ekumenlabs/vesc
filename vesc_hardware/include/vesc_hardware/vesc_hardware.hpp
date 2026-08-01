@@ -33,6 +33,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
+#include <unordered_set>
 #include <unordered_map>
 
 #include "hardware_interface/handle.hpp"
@@ -141,6 +143,12 @@ public:
   write(const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 private:
+  enum class ControlGroup
+  {
+    ROTOR = 0,
+    SERVO = 1,
+  };
+
   // VESC callback handlers
   void vescPacketCallback(const vesc_driver::VescPacketConstPtr & packet);
   void vescErrorCallback(const std::string & error);
@@ -164,6 +172,14 @@ private:
   // Interface definition initialization
   void populate_state_definitions();
   void populate_command_definitions();
+  std::unordered_set<std::string> get_state_interface_groups() const;
+  hardware_interface::CallbackReturn validate_and_mark_requested_state_interfaces(
+    const hardware_interface::ComponentInfo & joint);
+  hardware_interface::CallbackReturn validate_and_mark_requested_command_interfaces(
+    const hardware_interface::ComponentInfo & joint);
+
+  // Helper function to convert ControlGroup enum to string
+  const char * control_group_to_string(ControlGroup group);
 
   // Interface data structures
   struct StateInterfaceData
@@ -175,6 +191,7 @@ private:
   struct CommandInterfaceData
   {
     bool requested;  // Whether this interface was requested in URDF
+    ControlGroup control_group;  // Control group for this interface (ROTOR or SERVO)
     std::function<void(double)> set_command;  // Functor to send command to hardware
   };
 
@@ -217,8 +234,6 @@ private:
   // Interface availability tracking
   std::unordered_map<std::string, StateInterfaceData> state_interfaces_;
   std::unordered_map<std::string, CommandInterfaceData> command_interfaces_;
-
-  std::unordered_set<std::string> state_interface_groups_;
 
   // VESC interface
   std::unique_ptr<vesc_driver::VescInterface> vesc_interface_;

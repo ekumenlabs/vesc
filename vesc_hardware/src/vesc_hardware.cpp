@@ -141,87 +141,48 @@ hardware_interface::CallbackReturn VescHardware::on_init(
     return hardware_interface::CallbackReturn::ERROR;
   }
 
-  const auto & joint = info_.joints[0];
-
-  // Initialize list of supported interfaces
+    // Initialize list of supported interfaces
   populate_state_definitions();
   populate_command_definitions();
 
-  // Check which state interfaces are requested
-  std::set<std::string> state_interfaces_requested;
-  for (const auto & state_interface : joint.state_interfaces) {
-    auto it = state_interface_groups_.find(state_interface.name);
-    if (it == state_interface_groups_.end()) {
-      RCLCPP_FATAL(get_logger(),
-                   "Unsupported state interface '%s' requested for joint '%s'",
-                   state_interface.name.c_str(), joint.name.c_str());
-      return hardware_interface::CallbackReturn::ERROR;
-    }
-    if (state_interfaces_requested.count(state_interface.name) > 0) {
-      RCLCPP_FATAL(
-          get_logger(),
-          "Duplicate state interface '%s' requested for joint '%s'",
-          state_interface.name.c_str(), joint.name.c_str());
-      return hardware_interface::CallbackReturn::ERROR;
-    }
-    state_interfaces_requested.insert(state_interface.name);
-    // mark as requested all of the interfaces whose name matches the requested interface or is part of the requested group
-    for (auto & [name, data] : state_interfaces_) {
-      if (name == state_interface.name || name.rfind(state_interface.name + ".", 0) == 0) {
-        data.requested = true;
+  auto validate_component = [this](const hardware_interface::ComponentInfo & component) {
+      // Validate and mark requested state interfaces
+      if ((validate_and_mark_requested_state_interfaces(component) !=
+        hardware_interface::CallbackReturn::SUCCESS) ||
+        (validate_and_mark_requested_command_interfaces(component) !=
+        hardware_interface::CallbackReturn::SUCCESS))
+      {
+        return hardware_interface::CallbackReturn::ERROR;
       }
-      RCLCPP_INFO(get_logger(), "State interface '%s' requested",
-                  state_interface.name.c_str());
-    }
-  }
+      return hardware_interface::CallbackReturn::SUCCESS;
+    };
 
-  // Check which command interfaces are requested
-  for (const auto & command_interface : joint.command_interfaces) {
-    auto it = command_interfaces_.find(command_interface.name);
-    if (it == command_interfaces_.end()) {
-      RCLCPP_FATAL(
-          get_logger(),
-          "Unsupported command interface '%s' requested for joint '%s'",
-          command_interface.name.c_str(), joint.name.c_str());
+  // process joints
+  for (const auto & component : info_.joints) {
+    if (validate_component(component) != hardware_interface::CallbackReturn::SUCCESS) {
       return hardware_interface::CallbackReturn::ERROR;
     }
-    if (it->second.requested) {
-      RCLCPP_FATAL(
-          get_logger(),
-          "Duplicate command interface '%s' requested for joint '%s'",
-          command_interface.name.c_str(), joint.name.c_str());
+  }
+
+  // process sensors
+  for (const auto & component : info_.sensors) {
+    if (validate_component(component) != hardware_interface::CallbackReturn::SUCCESS) {
       return hardware_interface::CallbackReturn::ERROR;
     }
-    it->second.requested = true;
-    RCLCPP_INFO(get_logger(), "Command interface '%s' requested",
-                command_interface.name.c_str());
   }
 
-  // Check that at least one interface is requested
-  bool has_state_interface = false;
-  for (const auto & [name, data] : state_interfaces_) {
-    if (data.requested) {
-      has_state_interface = true;
-      break;
-    }
-  }
-
-  bool has_command_interface = false;
+  // check if more than one command interface from the same control group was requested
+  std::unordered_set<VescHardware::ControlGroup> control_groups_seen;
   for (const auto & [name, data] : command_interfaces_) {
     if (data.requested) {
-      has_command_interface = true;
-      break;
+      if (control_groups_seen.find(data.control_group) != control_groups_seen.end()) {
+        RCLCPP_FATAL(get_logger(),
+            "Multiple mutually exclusive command interfaces requested for control group %s",
+          control_group_to_string(data.control_group));
+        return hardware_interface::CallbackReturn::ERROR;
+      }
+      control_groups_seen.insert(data.control_group);
     }
-  }
-
-  if (!has_state_interface) {
-    RCLCPP_WARN(get_logger(), "No state interfaces requested for joint '%s'",
-                joint.name.c_str());
-  }
-
-  if (!has_command_interface) {
-    RCLCPP_WARN(get_logger(), "No command interfaces requested for joint '%s'",
-                joint.name.c_str());
   }
 
   // Initialize state storage
@@ -531,31 +492,123 @@ void VescHardware::populate_state_definitions()
     false,
     [this]() {return hw_imu_magnetic_field_z_.load(std::memory_order_relaxed);}
   };
+}
 
-  // create a vector of state interface group names
-  const auto get_group_name = [this](const auto & pair) {
+std::unordered_set<std::string> VescHardware::get_state_interface_groups() const
+{
+  // Create a set of state interface group names
+  std::unordered_set<std::string> state_interface_groups;
+
+  const auto get_group_name = [](const auto & pair) {
       const auto & name = pair.first;
       if (name.find('.') != std::string::npos) {
-        // This is a grouped interface, extract the group name
-        std::string group_name = name.substr(0, name.find('.'));
-        return group_name;
+      // This is a grouped interface, extract the group name
+        return name.substr(0, name.find('.'));
       } else {
-        // This is a single interface, add it directly
+      // This is a single interface, add it directly
         return name;
       }
     };
 
-  state_interface_groups_.clear();
   std::for_each(state_interfaces_.begin(), state_interfaces_.end(),
-    [this, &get_group_name](const auto & pair) {
-      state_interface_groups_.insert(get_group_name(pair));
+    [&state_interface_groups, &get_group_name](const auto & pair) {
+      state_interface_groups.insert(get_group_name(pair));
     });
+
+  return state_interface_groups;
+}
+
+hardware_interface::CallbackReturn VescHardware::validate_and_mark_requested_state_interfaces(
+  const hardware_interface::ComponentInfo & joint)
+{
+  // Get state interface groups for validation
+  auto state_interface_groups = get_state_interface_groups();
+
+  // Check which state interfaces are requested
+  for (const auto & state_interface : joint.state_interfaces) {
+    // check that it's a valid interface name or group
+    auto it = state_interface_groups.find(state_interface.name);
+    if (it == state_interface_groups.end()) {
+      RCLCPP_FATAL(get_logger(),
+                   "Unsupported state interface '%s' requested for joint '%s'",
+                   state_interface.name.c_str(), joint.name.c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+    // mark as requested all of the interfaces whose name matches the
+    // requested interface or is part of the requested group. Check if it was previously
+    // registered
+    for (auto & [name, data] : state_interfaces_) {
+      if (name == state_interface.name || name.rfind(state_interface.name + ".", 0) == 0) {
+        // if it was already requested, this is a duplicate request
+        if (data.requested) {
+          RCLCPP_FATAL(get_logger(),
+                       "Duplicate state interface '%s' requested for joint '%s'",
+                       state_interface.name.c_str(), joint.name.c_str());
+          return hardware_interface::CallbackReturn::ERROR;
+        }
+        data.requested = true;
+      }
+      RCLCPP_INFO(get_logger(), "State interface '%s' requested",
+                  state_interface.name.c_str());
+    }
+  }
+
+  // Check that at least one interface is requested
+  bool has_state_interface = std::any_of(state_interfaces_.begin(), state_interfaces_.end(),
+      [](const auto & pair) {return pair.second.requested;});
+
+  if (!has_state_interface) {
+    RCLCPP_WARN(get_logger(), "No state interfaces requested for joint '%s'",
+                joint.name.c_str());
+  }
+
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
+hardware_interface::CallbackReturn VescHardware::validate_and_mark_requested_command_interfaces(
+  const hardware_interface::ComponentInfo & joint)
+{
+  // Check which command interfaces are requested
+  for (const auto & command_interface : joint.command_interfaces) {
+    // check that it's a valid interface name
+    auto it = command_interfaces_.find(command_interface.name);
+    if (it == command_interfaces_.end()) {
+      RCLCPP_FATAL(
+          get_logger(),
+          "Unsupported command interface '%s' requested for joint '%s'",
+          command_interface.name.c_str(), joint.name.c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+    // check that it was not previously requested
+    if (it->second.requested) {
+      RCLCPP_FATAL(
+          get_logger(),
+          "Duplicate command interface '%s' requested for joint '%s'",
+          command_interface.name.c_str(), joint.name.c_str());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+    it->second.requested = true;
+    RCLCPP_INFO(get_logger(), "Command interface '%s' requested",
+                command_interface.name.c_str());
+  }
+
+  // Check that at least one interface is requested
+  bool has_command_interface = std::any_of(command_interfaces_.begin(), command_interfaces_.end(),
+      [](const auto & pair) {return pair.second.requested;});
+
+  if (!has_command_interface) {
+    RCLCPP_WARN(get_logger(), "No command interfaces requested for joint '%s'",
+                joint.name.c_str());
+  }
+
+  return hardware_interface::CallbackReturn::SUCCESS;
 }
 
 void VescHardware::populate_command_definitions()
 {
   command_interfaces_[hardware_interface::HW_IF_POSITION] = {
     false,
+    ControlGroup::ROTOR,
     [this](double value) {
       double vesc_position = convertMechanicalRadToDeg(value);
       vesc_interface_->setPosition(vesc_position);
@@ -563,6 +616,7 @@ void VescHardware::populate_command_definitions()
   };
   command_interfaces_[hardware_interface::HW_IF_VELOCITY] = {
     false,
+    ControlGroup::ROTOR,
     [this](double value) {
       double vesc_erpm = convertMechanicalRadSecToERPM(value);
       vesc_interface_->setSpeed(vesc_erpm);
@@ -570,6 +624,7 @@ void VescHardware::populate_command_definitions()
   };
   command_interfaces_[CUSTOM_HW_IF_SERVO] = {
     false,
+    ControlGroup::SERVO,
     [this](double value) {
       hw_command_servo_ = value;
       vesc_interface_->setServo(hw_command_servo_);
@@ -577,6 +632,7 @@ void VescHardware::populate_command_definitions()
   };
   command_interfaces_[CUSTOM_HW_IF_DUTY_CYCLE] = {
     false,
+    ControlGroup::ROTOR,
     [this](double value) {
       // Clamp duty cycle to [0, 1] range
       double clamped_duty_cycle = std::clamp(value, 0.0, 1.0);
@@ -585,12 +641,14 @@ void VescHardware::populate_command_definitions()
   };
   command_interfaces_[hardware_interface::HW_IF_CURRENT] = {
     false,
+    ControlGroup::ROTOR,
     [this](double value) {
       vesc_interface_->setCurrent(value);
     }
   };
   command_interfaces_[CUSTOM_HW_IF_BRAKE] = {
     false,
+    ControlGroup::ROTOR,
     [this](double value) {
       vesc_interface_->setBrake(value);
     }
@@ -794,6 +852,17 @@ void VescHardware::vescPacketCallback(
 void VescHardware::vescErrorCallback(const std::string & error)
 {
   RCLCPP_ERROR(get_logger(), "VESC error: %s", error.c_str());
+}
+
+const char * VescHardware::control_group_to_string(ControlGroup group)
+{
+  switch (group) {
+    case vesc_hardware::VescHardware::ControlGroup::ROTOR:
+      return "ROTOR";
+    case vesc_hardware::VescHardware::ControlGroup::SERVO:
+      return "SERVO";
+  }
+  return "UNKNOWN";
 }
 
 }  // namespace vesc_hardware
