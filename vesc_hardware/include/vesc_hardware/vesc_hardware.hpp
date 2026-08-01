@@ -189,6 +189,7 @@ private:
   std::atomic<double> hw_state_velocity_;
   std::atomic<double> hw_avg_id_;
   std::atomic<double> hw_avg_iq_;
+  std::atomic<double> hw_duty_cycle_;
 
   // IMU state storage (atomic for thread-safe access from callback)
   std::atomic<double> hw_imu_orientation_x_;
