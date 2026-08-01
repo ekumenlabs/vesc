@@ -218,6 +218,8 @@ private:
   std::unordered_map<std::string, StateInterfaceData> state_interfaces_;
   std::unordered_map<std::string, CommandInterfaceData> command_interfaces_;
 
+  std::unordered_set<std::string> state_interface_groups_;
+
   // VESC interface
   std::unique_ptr<vesc_driver::VescInterface> vesc_interface_;
 
