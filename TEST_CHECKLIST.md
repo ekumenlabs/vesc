@@ -73,7 +73,93 @@
 - [ ] Command 2π rad/s with gear_ratio=1.0, pole_pairs=1 → verify VESC receives 60 ERPM
 - [ ] Command 1 rad/s with gear_ratio=5.0, pole_pairs=7 → verify VESC receives ~333 ERPM
 
-## Published topics
+## Motor Current State Interfaces (D/Q Components)
+
+### Average D-axis Current (Amperes)
+- [ ] Verify `average_id` is in Amperes
+- [ ] Verify value matches VESC packet `avg_id()`
+- [ ] Check sign: positive/negative indicates direction in D-axis
+- [ ] Verify updates in real-time during motor operation
+
+### Average Q-axis Current (Amperes)
+- [ ] Verify `average_iq` is in Amperes
+- [ ] Verify value matches VESC packet `avg_iq()`
+- [ ] Check sign: positive/negative indicates direction in Q-axis
+- [ ] Verify updates in real-time during motor operation
+- [ ] Iq typically correlates with torque production
+
+## Motor Voltage State Interfaces (D/Q Components)
+
+### Average D-axis Voltage (Volts)
+- [ ] Verify `average_vd` is in Volts
+- [ ] Verify value matches VESC packet `avg_vd()`
+- [ ] Check magnitude relative to battery voltage
+- [ ] Verify updates in real-time during motor operation
+
+### Average Q-axis Voltage (Volts)
+- [ ] Verify `average_vq` is in Volts
+- [ ] Verify value matches VESC packet `avg_vq()`
+- [ ] Check magnitude relative to battery voltage
+- [ ] Verify updates in real-time during motor operation
+
+## Duty Cycle State Interface
+
+### Duty Cycle (unitless, range [0, 1])
+- [ ] Verify `duty_cycle` is unitless (0.0 to 1.0)
+- [ ] Verify value matches VESC packet `duty_cycle_now()`
+- [ ] At rest: duty cycle should be near 0.0
+- [ ] At full throttle: duty cycle should approach 1.0
+- [ ] Verify updates in real-time during motor operation
+
+## Servo State Interface
+
+### Servo Position (unitless)
+- [ ] Verify `servo` mirrors the commanded servo value
+- [ ] VESC cannot read back servo position, so state = last command
+- [ ] Verify value persists between write cycles
+
+## Command Interfaces
+
+### Position Command (radians, mechanical)
+- [ ] Command position in mechanical radians
+- [ ] Verify conversion to VESC degrees: `vesc_deg = mechanical_rad * gear_ratio * 180/π`
+- [ ] Test with various gear_ratio values
+- [ ] Verify motor moves to commanded position
+
+### Velocity Command (rad/s, mechanical)
+- [ ] Command velocity in mechanical rad/s
+- [ ] Verify conversion to VESC ERPM: `erpm = mechanical_rad_s * (60/2π) * gear_ratio * pole_pairs`
+- [ ] Test with various gear_ratio and pole_pairs values
+- [ ] Verify motor rotates at commanded speed
+
+### Servo Command (unitless)
+- [ ] Command servo position (typically -1.0 to +1.0 or 0.0 to 1.0)
+- [ ] Verify value is sent directly to VESC `setServo()`
+- [ ] Verify state interface mirrors commanded value
+
+### Current/Effort Command (Amperes)
+- [ ] Command current in Amperes using `effort` interface
+- [ ] Verify value is sent to VESC `setCurrent()`
+- [ ] Test positive values (forward torque)
+- [ ] Test negative values (reverse torque)
+- [ ] Verify motor torque correlates with commanded current
+
+### Duty Cycle Command (unitless, range [0, 1])
+- [ ] Command duty cycle between 0.0 and 1.0
+- [ ] Verify values are clamped to [0, 1] range
+- [ ] Test command < 0.0 → verify clamped to 0.0
+- [ ] Test command > 1.0 → verify clamped to 1.0
+- [ ] Test command = 0.5 → verify exactly 0.5 sent to VESC
+- [ ] Verify motor speed correlates with duty cycle
+
+### Brake Command (Amperes)
+- [ ] Command brake current in Amperes
+- [ ] Verify value is sent to VESC `setBrake()`
+- [ ] Test various brake current values
+- [ ] Verify motor decelerates/stops when brake is applied
+- [ ] Brake current should be positive (magnitude of braking force)
+
+## Published Topics
 
 - [ ] Verify `~/vesc_state` topic publishes `vesc_msgs::msg::VescState` messages
 - [ ] Verify `~/vesc_imu` topic publishes `vesc_msgs::msg::VescImuStamped` messages
