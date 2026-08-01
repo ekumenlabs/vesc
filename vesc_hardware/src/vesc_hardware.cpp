@@ -49,6 +49,7 @@ namespace
 // Custom control interfaces
 constexpr char CUSTOM_HW_IF_DUTY_CYCLE[] = "duty_cycle";
 constexpr char CUSTOM_HW_IF_SERVO[] = "servo";
+constexpr char CUSTOM_HW_IF_BRAKE[] = "brake";
 
 // Motor current and voltage interface names
 constexpr char CUSTOM_HW_IF_AVG_ID[] = "average_id";
@@ -554,6 +555,18 @@ void VescHardware::populate_command_definitions()
       // Clamp duty cycle to [0, 1] range
       double clamped_duty_cycle = std::clamp(value, 0.0, 1.0);
       vesc_interface_->setDutyCycle(clamped_duty_cycle);
+    }
+  };
+  command_interfaces_[hardware_interface::HW_IF_CURRENT] = {
+    false,
+    [this](double value) {
+      vesc_interface_->setCurrent(value);
+    }
+  };
+  command_interfaces_[CUSTOM_HW_IF_BRAKE] = {
+    false,
+    [this](double value) {
+      vesc_interface_->setBrake(value);
     }
   };
 }
