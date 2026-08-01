@@ -45,6 +45,32 @@
 namespace
 {
 constexpr char CUSTOM_HW_IF_SERVO[] = "servo";
+
+// IMU sensor interface names - Quaternion orientation
+constexpr char CUSTOM_HW_IF_ORIENTATION_X[] = "orientation.x";
+constexpr char CUSTOM_HW_IF_ORIENTATION_Y[] = "orientation.y";
+constexpr char CUSTOM_HW_IF_ORIENTATION_Z[] = "orientation.z";
+constexpr char CUSTOM_HW_IF_ORIENTATION_W[] = "orientation.w";
+
+// IMU sensor interface names - Euler angles
+constexpr char CUSTOM_HW_IF_ROLL[] = "roll";
+constexpr char CUSTOM_HW_IF_PITCH[] = "pitch";
+constexpr char CUSTOM_HW_IF_YAW[] = "yaw";
+
+// IMU sensor interface names - Angular velocity
+constexpr char CUSTOM_HW_IF_ANGULAR_VELOCITY_X[] = "angular_velocity.x";
+constexpr char CUSTOM_HW_IF_ANGULAR_VELOCITY_Y[] = "angular_velocity.y";
+constexpr char CUSTOM_HW_IF_ANGULAR_VELOCITY_Z[] = "angular_velocity.z";
+
+// IMU sensor interface names - Linear acceleration
+constexpr char CUSTOM_HW_IF_LINEAR_ACCELERATION_X[] = "linear_acceleration.x";
+constexpr char CUSTOM_HW_IF_LINEAR_ACCELERATION_Y[] = "linear_acceleration.y";
+constexpr char CUSTOM_HW_IF_LINEAR_ACCELERATION_Z[] = "linear_acceleration.z";
+
+// IMU sensor interface names - Magnetic field
+constexpr char CUSTOM_HW_IF_MAGNETIC_FIELD_X[] = "magnetic_field.x";
+constexpr char CUSTOM_HW_IF_MAGNETIC_FIELD_Y[] = "magnetic_field.y";
+constexpr char CUSTOM_HW_IF_MAGNETIC_FIELD_Z[] = "magnetic_field.z";
 }  // namespace
 
 namespace vesc_hardware
@@ -189,13 +215,24 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   if (publish_raw_state_) {
     hardware_values_publisher_ =
       get_node()->create_publisher<vesc_msgs::msg::VescState>(
-        "~/hardware_values", 10);
+        "~/vesc_state", 10);
 
     // Create realtime publisher wrapper
     realtime_hardware_values_publisher_ =
       std::make_shared<realtime_tools::RealtimePublisher<
           vesc_msgs::msg::VescState>>(
           hardware_values_publisher_);
+
+    // Create publisher for IMU data
+    imu_publisher_ =
+      get_node()->create_publisher<vesc_msgs::msg::VescImuStamped>(
+        "~/vesc_imu", 10);
+
+    // Create realtime publisher wrapper
+    realtime_imu_publisher_ =
+      std::make_shared<realtime_tools::RealtimePublisher<
+          vesc_msgs::msg::VescImuStamped>>(
+          imu_publisher_);
   }
 
   return hardware_interface::CallbackReturn::SUCCESS;
@@ -288,9 +325,10 @@ VescHardware::read(
   const rclcpp::Time & /*time*/,
   const rclcpp::Duration & /*period*/)
 {
-  // Request state from VESC (non-blocking)
+  // Request state and IMU data from VESC (non-blocking)
   if (vesc_interface_) {
     vesc_interface_->requestState();
+    vesc_interface_->requestImuData();
   }
 
   // Update state interfaces with current values from atomic variables
@@ -372,6 +410,80 @@ void VescHardware::populate_state_definitions()
     false,
     [this]() {return hw_command_servo_;}
   };
+
+  // IMU state interfaces - Quaternion orientation
+  state_interfaces_[CUSTOM_HW_IF_ORIENTATION_X] = {
+    false,
+    [this]() {return hw_imu_orientation_x_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_ORIENTATION_Y] = {
+    false,
+    [this]() {return hw_imu_orientation_y_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_ORIENTATION_Z] = {
+    false,
+    [this]() {return hw_imu_orientation_z_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_ORIENTATION_W] = {
+    false,
+    [this]() {return hw_imu_orientation_w_.load(std::memory_order_relaxed);}
+  };
+
+  // IMU state interfaces - Euler angles
+  state_interfaces_[CUSTOM_HW_IF_ROLL] = {
+    false,
+    [this]() {return hw_imu_roll_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_PITCH] = {
+    false,
+    [this]() {return hw_imu_pitch_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_YAW] = {
+    false,
+    [this]() {return hw_imu_yaw_.load(std::memory_order_relaxed);}
+  };
+
+  // IMU state interfaces - Angular velocity
+  state_interfaces_[CUSTOM_HW_IF_ANGULAR_VELOCITY_X] = {
+    false,
+    [this]() {return hw_imu_angular_velocity_x_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_ANGULAR_VELOCITY_Y] = {
+    false,
+    [this]() {return hw_imu_angular_velocity_y_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_ANGULAR_VELOCITY_Z] = {
+    false,
+    [this]() {return hw_imu_angular_velocity_z_.load(std::memory_order_relaxed);}
+  };
+
+  // IMU state interfaces - Linear acceleration
+  state_interfaces_[CUSTOM_HW_IF_LINEAR_ACCELERATION_X] = {
+    false,
+    [this]() {return hw_imu_linear_acceleration_x_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_LINEAR_ACCELERATION_Y] = {
+    false,
+    [this]() {return hw_imu_linear_acceleration_y_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_LINEAR_ACCELERATION_Z] = {
+    false,
+    [this]() {return hw_imu_linear_acceleration_z_.load(std::memory_order_relaxed);}
+  };
+
+  // IMU state interfaces - Magnetic field
+  state_interfaces_[CUSTOM_HW_IF_MAGNETIC_FIELD_X] = {
+    false,
+    [this]() {return hw_imu_magnetic_field_x_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_MAGNETIC_FIELD_Y] = {
+    false,
+    [this]() {return hw_imu_magnetic_field_y_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_MAGNETIC_FIELD_Z] = {
+    false,
+    [this]() {return hw_imu_magnetic_field_z_.load(std::memory_order_relaxed);}
+  };
 }
 
 void VescHardware::populate_command_definitions()
@@ -416,6 +528,93 @@ void VescHardware::processValuesPacket(
 
   // Publish telemetry data
   publishVescState(*values_packet);
+}
+
+void VescHardware::processImuPacket(
+  const vesc_driver::VescPacketImu *imu_packet)
+{
+  if (!imu_packet) {
+    return;
+  }
+
+  // Conversion lambda: degrees to radians
+  auto deg_to_rad = [](double deg) { return deg * M_PI / 180.0; };
+
+  // Standard gravity constant for converting acceleration from 'g' to m/s²
+  constexpr double STANDARD_GRAVITY = 9.80665;
+
+  // Store quaternion orientation (already in correct units)
+  hw_imu_orientation_x_.store(imu_packet->q_x(), std::memory_order_relaxed);
+  hw_imu_orientation_y_.store(imu_packet->q_y(), std::memory_order_relaxed);
+  hw_imu_orientation_z_.store(imu_packet->q_z(), std::memory_order_relaxed);
+  hw_imu_orientation_w_.store(imu_packet->q_w(), std::memory_order_relaxed);
+
+  // Store Euler angles (convert from degrees to radians)
+  hw_imu_roll_.store(deg_to_rad(imu_packet->roll()), std::memory_order_relaxed);
+  hw_imu_pitch_.store(deg_to_rad(imu_packet->pitch()), std::memory_order_relaxed);
+  hw_imu_yaw_.store(deg_to_rad(imu_packet->yaw()), std::memory_order_relaxed);
+
+  // Store angular velocity (convert from degrees/second to radians/second)
+  hw_imu_angular_velocity_x_.store(deg_to_rad(imu_packet->gyr_x()), std::memory_order_relaxed);
+  hw_imu_angular_velocity_y_.store(deg_to_rad(imu_packet->gyr_y()), std::memory_order_relaxed);
+  hw_imu_angular_velocity_z_.store(deg_to_rad(imu_packet->gyr_z()), std::memory_order_relaxed);
+
+  // Store linear acceleration (convert from 'g' to m/s²)
+  hw_imu_linear_acceleration_x_.store(imu_packet->acc_x() * STANDARD_GRAVITY, std::memory_order_relaxed);
+  hw_imu_linear_acceleration_y_.store(imu_packet->acc_y() * STANDARD_GRAVITY, std::memory_order_relaxed);
+  hw_imu_linear_acceleration_z_.store(imu_packet->acc_z() * STANDARD_GRAVITY, std::memory_order_relaxed);
+
+  // Store magnetic field (in raw units as received)
+  hw_imu_magnetic_field_x_.store(imu_packet->mag_x(), std::memory_order_relaxed);
+  hw_imu_magnetic_field_y_.store(imu_packet->mag_y(), std::memory_order_relaxed);
+  hw_imu_magnetic_field_z_.store(imu_packet->mag_z(), std::memory_order_relaxed);
+
+  // Publish raw IMU data
+  publishVescImu(*imu_packet);
+}
+
+void VescHardware::publishVescImu(
+  const vesc_driver::VescPacketImu & imu_packet)
+{
+  if (!realtime_imu_publisher_) {
+    return;
+  }
+
+  if (realtime_imu_publisher_->trylock()) {
+    auto & msg = realtime_imu_publisher_->msg_;
+
+    // Set timestamp
+    msg.header.stamp = get_node()->now();
+    msg.header.frame_id = "";
+
+    // Yaw, Pitch, Roll (in degrees as received)
+    msg.imu.ypr.x = imu_packet.yaw();
+    msg.imu.ypr.y = imu_packet.pitch();
+    msg.imu.ypr.z = imu_packet.roll();
+
+    // Linear acceleration (in m/s²)
+    msg.imu.linear_acceleration.x = imu_packet.acc_x();
+    msg.imu.linear_acceleration.y = imu_packet.acc_y();
+    msg.imu.linear_acceleration.z = imu_packet.acc_z();
+
+    // Angular velocity (in degrees/second as received)
+    msg.imu.angular_velocity.x = imu_packet.gyr_x();
+    msg.imu.angular_velocity.y = imu_packet.gyr_y();
+    msg.imu.angular_velocity.z = imu_packet.gyr_z();
+
+    // Compass (in raw units as received)
+    msg.imu.compass.x = imu_packet.mag_x();
+    msg.imu.compass.y = imu_packet.mag_y();
+    msg.imu.compass.z = imu_packet.mag_z();
+
+    // Orientation quaternion
+    msg.imu.orientation.w = imu_packet.q_w();
+    msg.imu.orientation.x = imu_packet.q_x();
+    msg.imu.orientation.y = imu_packet.q_y();
+    msg.imu.orientation.z = imu_packet.q_z();
+
+    realtime_imu_publisher_->unlockAndPublish();
+  }
 }
 
 void VescHardware::publishVescState(
@@ -495,6 +694,10 @@ void VescHardware::vescPacketCallback(
         fw_packet->paired() ? "yes" : "no"
       );
     }
+  } else if (packet->name() == "ImuData") {
+    const auto *imu_packet =
+      dynamic_cast<const vesc_driver::VescPacketImu *>(packet.get());
+    processImuPacket(imu_packet);
   }
 }
 
