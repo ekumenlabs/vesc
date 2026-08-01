@@ -44,7 +44,7 @@
 #include "rclcpp_lifecycle/state.hpp"
 #include "realtime_tools/realtime_publisher.hpp"
 #include "vesc_driver/vesc_interface.hpp"
-#include "vesc_hardware_msgs/msg/vesc_hardware_values.hpp"
+#include "vesc_msgs/msg/vesc_state.hpp"
 
 namespace vesc_hardware
 {
@@ -196,9 +196,9 @@ private:
   std::unique_ptr<vesc_driver::VescInterface> vesc_interface_;
 
   // Publisher for hardware values
-  std::shared_ptr<rclcpp::Publisher<vesc_hardware_msgs::msg::VescHardwareValues>>
+  std::shared_ptr<rclcpp::Publisher<vesc_msgs::msg::VescState>>
   hardware_values_publisher_;
-  std::shared_ptr<realtime_tools::RealtimePublisher<vesc_hardware_msgs::msg::VescHardwareValues>>
+  std::shared_ptr<realtime_tools::RealtimePublisher<vesc_msgs::msg::VescState>>
   realtime_hardware_values_publisher_;
 };
 

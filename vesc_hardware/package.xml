@@ -16,7 +16,7 @@
   <depend>rclcpp_lifecycle</depend>
   <depend>realtime_tools</depend>
   <depend>vesc_driver</depend>
-  <depend>vesc_hardware_msgs</depend>
+  <depend>vesc_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
