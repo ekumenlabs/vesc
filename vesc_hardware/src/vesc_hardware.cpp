@@ -148,24 +148,31 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   populate_command_definitions();
 
   // Check which state interfaces are requested
+  std::set<std::string> state_interfaces_requested;
   for (const auto & state_interface : joint.state_interfaces) {
-    auto it = state_interfaces_.find(state_interface.name);
-    if (it == state_interfaces_.end()) {
+    auto it = state_interface_groups_.find(state_interface.name);
+    if (it == state_interface_groups_.end()) {
       RCLCPP_FATAL(get_logger(),
                    "Unsupported state interface '%s' requested for joint '%s'",
                    state_interface.name.c_str(), joint.name.c_str());
       return hardware_interface::CallbackReturn::ERROR;
     }
-    if (it->second.requested) {
+    if (state_interfaces_requested.count(state_interface.name) > 0) {
       RCLCPP_FATAL(
           get_logger(),
           "Duplicate state interface '%s' requested for joint '%s'",
           state_interface.name.c_str(), joint.name.c_str());
       return hardware_interface::CallbackReturn::ERROR;
     }
-    it->second.requested = true;
-    RCLCPP_INFO(get_logger(), "State interface '%s' requested",
-                state_interface.name.c_str());
+    state_interfaces_requested.insert(state_interface.name);
+    // mark as requested all of the interfaces whose name matches the requested interface or is part of the requested group
+    for (auto & [name, data] : state_interfaces_) {
+      if (name == state_interface.name || name.rfind(state_interface.name + ".", 0) == 0) {
+        data.requested = true;
+      }
+      RCLCPP_INFO(get_logger(), "State interface '%s' requested",
+                  state_interface.name.c_str());
+    }
   }
 
   // Check which command interfaces are requested
@@ -524,6 +531,25 @@ void VescHardware::populate_state_definitions()
     false,
     [this]() {return hw_imu_magnetic_field_z_.load(std::memory_order_relaxed);}
   };
+
+  // create a vector of state interface group names
+  const auto get_group_name = [this](const auto & pair) {
+      const auto & name = pair.first;
+      if (name.find('.') != std::string::npos) {
+        // This is a grouped interface, extract the group name
+        std::string group_name = name.substr(0, name.find('.'));
+        return group_name;
+      } else {
+        // This is a single interface, add it directly
+        return name;
+      }
+    };
+
+  state_interface_groups_.clear();
+  std::for_each(state_interfaces_.begin(), state_interfaces_.end(),
+    [this, &get_group_name](const auto & pair) {
+      state_interface_groups_.insert(get_group_name(pair));
+    });
 }
 
 void VescHardware::populate_command_definitions()
