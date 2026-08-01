@@ -44,6 +44,7 @@
 #include "rclcpp_lifecycle/state.hpp"
 #include "realtime_tools/realtime_publisher.hpp"
 #include "vesc_driver/vesc_interface.hpp"
+#include "vesc_msgs/msg/vesc_imu_stamped.hpp"
 #include "vesc_msgs/msg/vesc_state.hpp"
 
 namespace vesc_hardware
@@ -146,7 +147,9 @@ private:
 
   // VESC packet processing
   void processValuesPacket(const vesc_driver::VescPacketValues *values_packet);
+  void processImuPacket(const vesc_driver::VescPacketImu *imu_packet);
   void publishVescState(const vesc_driver::VescPacketValues & values_packet);
+  void publishVescImu(const vesc_driver::VescPacketImu & imu_packet);
 
   // Conversion functions for VESC values to mechanical values (for reading
   // state)
@@ -185,6 +188,24 @@ private:
   std::atomic<double> hw_state_position_;
   std::atomic<double> hw_state_velocity_;
 
+  // IMU state storage (atomic for thread-safe access from callback)
+  std::atomic<double> hw_imu_orientation_x_;
+  std::atomic<double> hw_imu_orientation_y_;
+  std::atomic<double> hw_imu_orientation_z_;
+  std::atomic<double> hw_imu_orientation_w_;
+  std::atomic<double> hw_imu_roll_;
+  std::atomic<double> hw_imu_pitch_;
+  std::atomic<double> hw_imu_yaw_;
+  std::atomic<double> hw_imu_angular_velocity_x_;
+  std::atomic<double> hw_imu_angular_velocity_y_;
+  std::atomic<double> hw_imu_angular_velocity_z_;
+  std::atomic<double> hw_imu_linear_acceleration_x_;
+  std::atomic<double> hw_imu_linear_acceleration_y_;
+  std::atomic<double> hw_imu_linear_acceleration_z_;
+  std::atomic<double> hw_imu_magnetic_field_x_;
+  std::atomic<double> hw_imu_magnetic_field_y_;
+  std::atomic<double> hw_imu_magnetic_field_z_;
+
   // Command storage (servo only - state mirrors command since VESC can't read it)
   double hw_command_servo_;
 
@@ -200,6 +221,12 @@ private:
   hardware_values_publisher_;
   std::shared_ptr<realtime_tools::RealtimePublisher<vesc_msgs::msg::VescState>>
   realtime_hardware_values_publisher_;
+
+  // Publisher for IMU data
+  std::shared_ptr<rclcpp::Publisher<vesc_msgs::msg::VescImuStamped>>
+  imu_publisher_;
+  std::shared_ptr<realtime_tools::RealtimePublisher<vesc_msgs::msg::VescImuStamped>>
+  realtime_imu_publisher_;
 };
 
 }  // namespace vesc_hardware
