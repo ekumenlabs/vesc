@@ -46,6 +46,10 @@ namespace
 {
 constexpr char CUSTOM_HW_IF_SERVO[] = "servo";
 
+// Motor current interface names
+constexpr char CUSTOM_HW_IF_AVG_ID[] = "average_id";
+constexpr char CUSTOM_HW_IF_AVG_IQ[] = "average_iq";
+
 // IMU sensor interface names - Quaternion orientation
 constexpr char CUSTOM_HW_IF_ORIENTATION_X[] = "orientation.x";
 constexpr char CUSTOM_HW_IF_ORIENTATION_Y[] = "orientation.y";
@@ -411,6 +415,16 @@ void VescHardware::populate_state_definitions()
     [this]() {return hw_command_servo_;}
   };
 
+  // Motor current state interfaces
+  state_interfaces_[CUSTOM_HW_IF_AVG_ID] = {
+    false,
+    [this]() {return hw_avg_id_.load(std::memory_order_relaxed);}
+  };
+  state_interfaces_[CUSTOM_HW_IF_AVG_IQ] = {
+    false,
+    [this]() {return hw_avg_iq_.load(std::memory_order_relaxed);}
+  };
+
   // IMU state interfaces - Quaternion orientation
   state_interfaces_[CUSTOM_HW_IF_ORIENTATION_X] = {
     false,
@@ -525,6 +539,10 @@ void VescHardware::processValuesPacket(
   double mechanical_velocity =
     convertERPMtoMechanicalRadSec(values_packet->rpm());
   hw_state_velocity_.store(mechanical_velocity, std::memory_order_relaxed);
+
+  // Store motor current values
+  hw_avg_id_.store(values_packet->avg_id(), std::memory_order_relaxed);
+  hw_avg_iq_.store(values_packet->avg_iq(), std::memory_order_relaxed);
 
   // Publish telemetry data
   publishVescState(*values_packet);
