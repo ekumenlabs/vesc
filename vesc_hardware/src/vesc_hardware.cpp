@@ -538,7 +538,7 @@ void VescHardware::processImuPacket(
   }
 
   // Conversion lambda: degrees to radians
-  auto deg_to_rad = [](double deg) { return deg * M_PI / 180.0; };
+  auto deg_to_rad = [](double deg) {return deg * M_PI / 180.0;};
 
   // Standard gravity constant for converting acceleration from 'g' to m/s²
   constexpr double STANDARD_GRAVITY = 9.80665;
@@ -560,9 +560,12 @@ void VescHardware::processImuPacket(
   hw_imu_angular_velocity_z_.store(deg_to_rad(imu_packet->gyr_z()), std::memory_order_relaxed);
 
   // Store linear acceleration (convert from 'g' to m/s²)
-  hw_imu_linear_acceleration_x_.store(imu_packet->acc_x() * STANDARD_GRAVITY, std::memory_order_relaxed);
-  hw_imu_linear_acceleration_y_.store(imu_packet->acc_y() * STANDARD_GRAVITY, std::memory_order_relaxed);
-  hw_imu_linear_acceleration_z_.store(imu_packet->acc_z() * STANDARD_GRAVITY, std::memory_order_relaxed);
+  hw_imu_linear_acceleration_x_.store(imu_packet->acc_x() * STANDARD_GRAVITY,
+      std::memory_order_relaxed);
+  hw_imu_linear_acceleration_y_.store(imu_packet->acc_y() * STANDARD_GRAVITY,
+      std::memory_order_relaxed);
+  hw_imu_linear_acceleration_z_.store(imu_packet->acc_z() * STANDARD_GRAVITY,
+      std::memory_order_relaxed);
 
   // Store magnetic field (in raw units as received)
   hw_imu_magnetic_field_x_.store(imu_packet->mag_x(), std::memory_order_relaxed);
