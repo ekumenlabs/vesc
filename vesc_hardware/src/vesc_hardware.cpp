@@ -145,12 +145,16 @@ hardware_interface::CallbackReturn VescHardware::on_init(
   populate_state_definitions();
   populate_command_definitions();
 
-  auto validate_component = [this](const hardware_interface::ComponentInfo & component) {
+  auto validate_component = [this](
+    const hardware_interface::ComponentInfo & component,
+    ComponentType type) {
       // Validate and mark requested state interfaces
       if ((validate_and_mark_requested_state_interfaces(component) !=
         hardware_interface::CallbackReturn::SUCCESS) ||
         (validate_and_mark_requested_command_interfaces(component) !=
-        hardware_interface::CallbackReturn::SUCCESS))
+        hardware_interface::CallbackReturn::SUCCESS) ||
+        (validate_status_and_command_mix(
+        component, type) != hardware_interface::CallbackReturn::SUCCESS))
       {
         return hardware_interface::CallbackReturn::ERROR;
       }
@@ -159,29 +163,21 @@ hardware_interface::CallbackReturn VescHardware::on_init(
 
   // process joints
   for (const auto & component : info_.joints) {
-    if (validate_component(component) != hardware_interface::CallbackReturn::SUCCESS) {
+    if (validate_component(
+        component, VescHardware::ComponentType::JOINT) !=
+      hardware_interface::CallbackReturn::SUCCESS)
+    {
       return hardware_interface::CallbackReturn::ERROR;
     }
   }
 
   // process sensors
   for (const auto & component : info_.sensors) {
-    if (validate_component(component) != hardware_interface::CallbackReturn::SUCCESS) {
+    if (validate_component(
+        component, VescHardware::ComponentType::SENSOR) !=
+      hardware_interface::CallbackReturn::SUCCESS)
+    {
       return hardware_interface::CallbackReturn::ERROR;
-    }
-  }
-
-  // check if more than one command interface from the same control group was requested
-  std::unordered_set<VescHardware::ControlGroup> control_groups_seen;
-  for (const auto & [name, data] : command_interfaces_) {
-    if (data.requested) {
-      if (control_groups_seen.find(data.control_group) != control_groups_seen.end()) {
-        RCLCPP_FATAL(get_logger(),
-            "Multiple mutually exclusive command interfaces requested for control group %s",
-          control_group_to_string(data.control_group));
-        return hardware_interface::CallbackReturn::ERROR;
-      }
-      control_groups_seen.insert(data.control_group);
     }
   }
 
@@ -384,113 +380,162 @@ double VescHardware::convertMechanicalRadSecToERPM(
 
 void VescHardware::populate_state_definitions()
 {
-  state_interfaces_[hardware_interface::HW_IF_POSITION] = {
-    false,
-    [this]() {return hw_state_position_.load(std::memory_order_relaxed);}
-  };
-  state_interfaces_[hardware_interface::HW_IF_VELOCITY] = {
-    false,
-    [this]() {return hw_state_velocity_.load(std::memory_order_relaxed);}
-  };
+  // servo state interface
   state_interfaces_[CUSTOM_HW_IF_SERVO] = {
     false,
-    [this]() {return hw_command_servo_;}
+    [this]() {return hw_command_servo_;},
+    ComponentType::JOINT,
+    ComponentGroup::SERVO
   };
 
   // Motor current state interfaces
+  state_interfaces_[hardware_interface::HW_IF_POSITION] = {
+    false,
+    [this]() {return hw_state_position_.load(std::memory_order_relaxed);},
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR
+  };
+  state_interfaces_[hardware_interface::HW_IF_VELOCITY] = {
+    false,
+    [this]() {return hw_state_velocity_.load(std::memory_order_relaxed);},
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR
+  };
   state_interfaces_[CUSTOM_HW_IF_AVG_ID] = {
     false,
-    [this]() {return hw_avg_id_.load(std::memory_order_relaxed);}
+    [this]() {return hw_avg_id_.load(std::memory_order_relaxed);},
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR
   };
   state_interfaces_[CUSTOM_HW_IF_AVG_IQ] = {
     false,
-    [this]() {return hw_avg_iq_.load(std::memory_order_relaxed);}
+    [this]() {return hw_avg_iq_.load(std::memory_order_relaxed);},
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR
   };
   state_interfaces_[CUSTOM_HW_IF_AVG_VD] = {
     false,
-    [this]() {return hw_avg_vd_.load(std::memory_order_relaxed);}
+    [this]() {return hw_avg_vd_.load(std::memory_order_relaxed);},
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR
   };
   state_interfaces_[CUSTOM_HW_IF_AVG_VQ] = {
     false,
-    [this]() {return hw_avg_vq_.load(std::memory_order_relaxed);}
+    [this]() {return hw_avg_vq_.load(std::memory_order_relaxed);},
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR
   };
   state_interfaces_[CUSTOM_HW_IF_DUTY_CYCLE] = {
     false,
-    [this]() {return hw_duty_cycle_.load(std::memory_order_relaxed);}
+    [this]() {return hw_duty_cycle_.load(std::memory_order_relaxed);},
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR
   };
 
   // IMU state interfaces - Quaternion orientation
   state_interfaces_[CUSTOM_HW_IF_ORIENTATION_X] = {
     false,
-    [this]() {return hw_imu_orientation_x_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_orientation_x_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_ORIENTATION_Y] = {
     false,
-    [this]() {return hw_imu_orientation_y_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_orientation_y_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_ORIENTATION_Z] = {
     false,
-    [this]() {return hw_imu_orientation_z_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_orientation_z_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_ORIENTATION_W] = {
     false,
-    [this]() {return hw_imu_orientation_w_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_orientation_w_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
 
   // IMU state interfaces - Euler angles
   state_interfaces_[CUSTOM_HW_IF_ROLL] = {
     false,
-    [this]() {return hw_imu_roll_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_roll_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_PITCH] = {
     false,
-    [this]() {return hw_imu_pitch_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_pitch_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_YAW] = {
     false,
-    [this]() {return hw_imu_yaw_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_yaw_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
 
   // IMU state interfaces - Angular velocity
   state_interfaces_[CUSTOM_HW_IF_ANGULAR_VELOCITY_X] = {
     false,
-    [this]() {return hw_imu_angular_velocity_x_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_angular_velocity_x_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_ANGULAR_VELOCITY_Y] = {
     false,
-    [this]() {return hw_imu_angular_velocity_y_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_angular_velocity_y_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_ANGULAR_VELOCITY_Z] = {
     false,
-    [this]() {return hw_imu_angular_velocity_z_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_angular_velocity_z_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
 
   // IMU state interfaces - Linear acceleration
   state_interfaces_[CUSTOM_HW_IF_LINEAR_ACCELERATION_X] = {
     false,
-    [this]() {return hw_imu_linear_acceleration_x_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_linear_acceleration_x_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_LINEAR_ACCELERATION_Y] = {
     false,
-    [this]() {return hw_imu_linear_acceleration_y_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_linear_acceleration_y_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_LINEAR_ACCELERATION_Z] = {
     false,
-    [this]() {return hw_imu_linear_acceleration_z_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_linear_acceleration_z_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
 
   // IMU state interfaces - Magnetic field
   state_interfaces_[CUSTOM_HW_IF_MAGNETIC_FIELD_X] = {
     false,
-    [this]() {return hw_imu_magnetic_field_x_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_magnetic_field_x_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_MAGNETIC_FIELD_Y] = {
     false,
-    [this]() {return hw_imu_magnetic_field_y_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_magnetic_field_y_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
   state_interfaces_[CUSTOM_HW_IF_MAGNETIC_FIELD_Z] = {
     false,
-    [this]() {return hw_imu_magnetic_field_z_.load(std::memory_order_relaxed);}
+    [this]() {return hw_imu_magnetic_field_z_.load(std::memory_order_relaxed);},
+    ComponentType::SENSOR,
+    ComponentGroup::IMU
   };
 }
 
@@ -604,54 +649,114 @@ hardware_interface::CallbackReturn VescHardware::validate_and_mark_requested_com
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
+hardware_interface::CallbackReturn VescHardware::validate_status_and_command_mix(
+  const hardware_interface::ComponentInfo & component, ComponentType type)
+{
+  std::set<ComponentGroup> groups_seen;
+  std::set<ComponentType> types_seen;
+
+  // enumerate the types and groups of both state and command interface.
+  // Ensure there is only a single type and is equal to the expected type,
+  // and that there is only a single group.
+  for (const auto & state_interface : component.state_interfaces) {
+    auto it = state_interfaces_.find(state_interface.name);
+    if (it != state_interfaces_.end()) {
+      groups_seen.insert(it->second.component_group);
+      types_seen.insert(it->second.component_type);
+    }
+  }
+  for (const auto & command_interface : component.command_interfaces) {
+    auto it = command_interfaces_.find(command_interface.name);
+    if (it != command_interfaces_.end()) {
+      groups_seen.insert(it->second.component_group);
+      types_seen.insert(it->second.component_type);
+    }
+  }
+  if (groups_seen.size() > 1) {
+    std::string groups_list;
+    for (const auto & group : groups_seen) {
+      if (!groups_list.empty()) {
+        groups_list += ", ";
+      }
+      groups_list += component_group_to_string(group);
+    }
+    RCLCPP_FATAL(
+        get_logger(),
+        "Component '%s' has interfaces from more than one device mutually "
+        "exclusive control group. Groups seen: [%s]",
+        component.name.c_str(), groups_list.c_str());
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
+  if (types_seen.size() > 1 || *types_seen.begin() != type) {
+    RCLCPP_FATAL(
+        get_logger(),
+        "Component '%s' is in a %s tag, but has interfaces of type %s.'",
+        component.name.c_str(), component_type_to_string(type),
+        component_type_to_string(*types_seen.begin()));
+    return hardware_interface::CallbackReturn::ERROR;
+  }
+
+  return hardware_interface::CallbackReturn::SUCCESS;
+}
+
 void VescHardware::populate_command_definitions()
 {
-  command_interfaces_[hardware_interface::HW_IF_POSITION] = {
-    false,
-    ControlGroup::ROTOR,
-    [this](double value) {
-      double vesc_position = convertMechanicalRadToDeg(value);
-      vesc_interface_->setPosition(vesc_position);
-    }
-  };
-  command_interfaces_[hardware_interface::HW_IF_VELOCITY] = {
-    false,
-    ControlGroup::ROTOR,
-    [this](double value) {
-      double vesc_erpm = convertMechanicalRadSecToERPM(value);
-      vesc_interface_->setSpeed(vesc_erpm);
-    }
-  };
+  // Servo command interface
   command_interfaces_[CUSTOM_HW_IF_SERVO] = {
     false,
-    ControlGroup::SERVO,
     [this](double value) {
       hw_command_servo_ = value;
       vesc_interface_->setServo(hw_command_servo_);
-    }
+    },
+    ComponentType::JOINT,
+    ComponentGroup::SERVO,
+  };
+
+  // Motor command interfaces
+  command_interfaces_[hardware_interface::HW_IF_POSITION] = {
+    false,
+    [this](double value) {
+      double vesc_position = convertMechanicalRadToDeg(value);
+      vesc_interface_->setPosition(vesc_position);
+    },
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR,
+  };
+  command_interfaces_[hardware_interface::HW_IF_VELOCITY] = {
+    false,
+    [this](double value) {
+      double vesc_erpm = convertMechanicalRadSecToERPM(value);
+      vesc_interface_->setSpeed(vesc_erpm);
+    },
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR,
   };
   command_interfaces_[CUSTOM_HW_IF_DUTY_CYCLE] = {
     false,
-    ControlGroup::ROTOR,
     [this](double value) {
       // Clamp duty cycle to [0, 1] range
       double clamped_duty_cycle = std::clamp(value, 0.0, 1.0);
       vesc_interface_->setDutyCycle(clamped_duty_cycle);
-    }
+    },
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR,
   };
   command_interfaces_[hardware_interface::HW_IF_CURRENT] = {
     false,
-    ControlGroup::ROTOR,
     [this](double value) {
       vesc_interface_->setCurrent(value);
-    }
+    },
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR,
   };
   command_interfaces_[CUSTOM_HW_IF_BRAKE] = {
     false,
-    ControlGroup::ROTOR,
     [this](double value) {
       vesc_interface_->setBrake(value);
-    }
+    },
+    ComponentType::JOINT,
+    ComponentGroup::ROTOR,
   };
 }
 
@@ -854,13 +959,26 @@ void VescHardware::vescErrorCallback(const std::string & error)
   RCLCPP_ERROR(get_logger(), "VESC error: %s", error.c_str());
 }
 
-const char * VescHardware::control_group_to_string(ControlGroup group)
+const char * VescHardware::component_group_to_string(ComponentGroup group) const
 {
   switch (group) {
-    case vesc_hardware::VescHardware::ControlGroup::ROTOR:
+    case vesc_hardware::VescHardware::ComponentGroup::ROTOR:
       return "ROTOR";
-    case vesc_hardware::VescHardware::ControlGroup::SERVO:
+    case vesc_hardware::VescHardware::ComponentGroup::SERVO:
       return "SERVO";
+    case vesc_hardware::VescHardware::ComponentGroup::IMU:
+      return "IMU";
+  }
+  return "UNKNOWN";
+}
+
+const char * VescHardware::component_type_to_string(ComponentType type) const
+{
+  switch (type) {
+    case vesc_hardware::VescHardware::ComponentType::JOINT:
+      return "JOINT";
+    case vesc_hardware::VescHardware::ComponentType::SENSOR:
+      return "SENSOR";
   }
   return "UNKNOWN";
 }
