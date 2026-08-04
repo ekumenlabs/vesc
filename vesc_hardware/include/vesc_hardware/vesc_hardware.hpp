@@ -143,10 +143,17 @@ public:
   write(const rclcpp::Time & time, const rclcpp::Duration & period) override;
 
 private:
-  enum class ControlGroup
+  enum class ComponentGroup
   {
-    ROTOR = 0,
-    SERVO = 1,
+    ROTOR,
+    SERVO,
+    IMU,
+  };
+
+  enum class ComponentType
+  {
+    JOINT,
+    SENSOR,
   };
 
   // VESC callback handlers
@@ -174,25 +181,32 @@ private:
   void populate_command_definitions();
   std::unordered_set<std::string> get_state_interface_groups() const;
   hardware_interface::CallbackReturn validate_and_mark_requested_state_interfaces(
-    const hardware_interface::ComponentInfo & joint);
+    const hardware_interface::ComponentInfo & component);
   hardware_interface::CallbackReturn validate_and_mark_requested_command_interfaces(
-    const hardware_interface::ComponentInfo & joint);
+    const hardware_interface::ComponentInfo & component);
+  hardware_interface::CallbackReturn validate_status_and_command_mix(
+    const hardware_interface::ComponentInfo & component, ComponentType type);
 
-  // Helper function to convert ControlGroup enum to string
-  const char * control_group_to_string(ControlGroup group);
+  const char * component_group_to_string(ComponentGroup group) const;
+  const char * component_type_to_string(ComponentType type) const;
 
   // Interface data structures
   struct StateInterfaceData
   {
     bool requested;  // Whether this interface was requested in URDF
     std::function<double()> get_value;  // Functor to retrieve current state value
+
+    ComponentType component_type;  // Control type for this interface
+    ComponentGroup component_group;  // Control group for this interface
   };
 
   struct CommandInterfaceData
   {
     bool requested;  // Whether this interface was requested in URDF
-    ControlGroup control_group;  // Control group for this interface (ROTOR or SERVO)
     std::function<void(double)> set_command;  // Functor to send command to hardware
+
+    ComponentType component_type;  // Control type for this interface
+    ComponentGroup component_group;  // Control group for this interface
   };
 
   // Hardware parameters
